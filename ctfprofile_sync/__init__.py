@@ -43,32 +43,37 @@ def load(app):
 
 def _ensure_user_field():
     """
-    Create a 'CTFProfile ID' text field in CTFd's user-profile fields table
-    if one doesn't already exist.  This field is shown on every user's
-    settings page so they can enter the public ID from their CTFProfile
-    account, enabling precise solve attribution even when CTFd and
-    CTFProfile usernames differ.
+    Create a 'CTFProfile Linking Token' text field in CTFd's user-profile
+    fields table if one doesn't already exist.
+
+    This field is shown on every user's Settings page so they can paste in
+    their private CTFProfile linking token.  The token is NOT the same as
+    the public CTFProfile ID — it is a secret credential specific to the
+    CTFd integration and is only visible in the user's own CTFProfile
+    Account Settings page.
     """
     try:
         from CTFd.models import UserFields, db  # type: ignore
-        existing = UserFields.query.filter_by(name="CTFProfile ID").first()
+        existing = UserFields.query.filter_by(name="CTFProfile Linking Token").first()
         if not existing:
             field = UserFields(
-                name="CTFProfile ID",
+                name="CTFProfile Linking Token",
                 description=(
-                    "Your CTFProfile public ID. "
-                    "Find it on your CTFProfile profile page under Account Settings. "
-                    "Setting this ensures your CTFd solves are linked to the correct "
-                    "CTFProfile account even if your usernames differ."
+                    "Your private CTFProfile linking token. "
+                    "Find it in CTFProfile → Profile → Account Settings → "
+                    "\"CTFd linking token\". "
+                    "This is NOT your public CTFProfile ID — it is a private secret. "
+                    "Do not share it. Setting this ensures your CTFd solves are credited "
+                    "to the correct CTFProfile account even if your usernames differ."
                 ),
                 field_type="text",
                 required=False,
-                public=True,
+                public=False,   # private — not shown on public CTFd profiles
                 editable=True,
             )
             db.session.add(field)
             db.session.commit()
-            log.info("CTFProfile Sync: created 'CTFProfile ID' user field.")
+            log.info("CTFProfile Sync: created 'CTFProfile Linking Token' user field.")
     except Exception as exc:
         log.warning("CTFProfile Sync: could not create user field: %s", exc)
 

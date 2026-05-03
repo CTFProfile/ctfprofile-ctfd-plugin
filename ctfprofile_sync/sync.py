@@ -146,15 +146,19 @@ def build_solve_payload(solve) -> dict:
 
 def _get_ctfprofile_id(user) -> str:
     """
-    Read the value of the 'CTFProfile ID' custom user field for *user*.
+    Read the value of the 'CTFProfile Linking Token' custom user field.
 
     CTFd stores custom profile fields in UserFieldEntries, not as direct
     model attributes — so we query the table explicitly.  Returns an empty
     string if the field doesn't exist or the user hasn't filled it in.
+
+    The value is sent to CTFProfile as ``ctfprofile_id`` in the payload; on
+    the CTFProfile side it is matched against the user's private
+    ``ctfd_link_token`` field, NOT the public ``public_id``.
     """
     try:
         from CTFd.models import UserFields, UserFieldEntries  # type: ignore
-        field = UserFields.query.filter_by(name="CTFProfile ID").first()
+        field = UserFields.query.filter_by(name="CTFProfile Linking Token").first()
         if not field:
             return ""
         entry = UserFieldEntries.query.filter_by(
