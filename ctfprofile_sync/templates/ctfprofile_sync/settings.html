@@ -1,0 +1,158 @@
+{% extends "admin/base.html" %}
+
+{% block title %}CTFProfile Sync{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+  <div class="container">
+    <h1>CTFProfile Sync</h1>
+    <p class="lead">Configure live data sync between this CTFd instance and your CTFProfile event.</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible" role="alert">
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="row">
+    <div class="col-md-8">
+
+      <!-- Settings form -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h4 class="mb-0">Settings</h4>
+        </div>
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('ctfprofile_sync.save') }}">
+            <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+
+            <div class="form-group">
+              <label for="ctfprofile_url">CTFProfile Base URL</label>
+              <input type="url" class="form-control" id="ctfprofile_url" name="ctfprofile_url"
+                     value="{{ ctfprofile_url }}"
+                     placeholder="https://ctfprofile.example.com">
+              <small class="form-text text-muted">The root URL of your CTFProfile instance (no trailing slash).</small>
+            </div>
+
+            <div class="form-group">
+              <label for="ctfprofile_api_key">Event API Key</label>
+              <input type="password" class="form-control" id="ctfprofile_api_key" name="ctfprofile_api_key"
+                     value="{{ ctfprofile_api_key }}"
+                     placeholder="ctfp_evt_...">
+              <small class="form-text text-muted">
+                Found on the CTFProfile event integrations page (<strong>Events → [your event] → Integrations</strong>).
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label for="ctfprofile_event_slug">Event Slug</label>
+              <input type="text" class="form-control" id="ctfprofile_event_slug" name="ctfprofile_event_slug"
+                     value="{{ ctfprofile_event_slug }}"
+                     placeholder="my-ctf-2025">
+              <small class="form-text text-muted">
+                The slug from the CTFProfile event URL, e.g. <code>my-ctf-2025</code> from
+                <code>ctfprofile.example.com/events/my-ctf-2025/</code>.
+              </small>
+            </div>
+
+            <div class="form-group">
+              <div class="custom-control custom-switch">
+                <input type="checkbox" class="custom-control-input" id="ctfprofile_sync_on_solve"
+                       name="ctfprofile_sync_on_solve"
+                       {% if ctfprofile_sync_on_solve == "1" %}checked{% endif %}>
+                <label class="custom-control-label" for="ctfprofile_sync_on_solve">
+                  Sync automatically on each solve
+                </label>
+              </div>
+              <small class="form-text text-muted">
+                When enabled, CTFProfile is updated in real-time whenever a flag is captured.
+                Disable this if you prefer to push data manually using the Full Sync button below.
+              </small>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h4 class="mb-0">Actions</h4>
+        </div>
+        <div class="card-body">
+          <p>
+            <strong>Test Connection</strong> — Sends an empty payload to verify your URL and API key
+            are correct.
+          </p>
+          <form method="POST" action="{{ url_for('ctfprofile_sync.test_connection') }}" class="d-inline">
+            <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+            <button type="submit" class="btn btn-outline-secondary">Test Connection</button>
+          </form>
+
+          <hr>
+
+          <p>
+            <strong>Full Sync</strong> — Pushes <em>all</em> current CTFd data (challenges, users,
+            teams, solves, and standings) to CTFProfile in one request. Use this after initial setup
+            or to recover from a missed real-time event.
+          </p>
+          <form method="POST" action="{{ url_for('ctfprofile_sync.full_sync') }}" class="d-inline">
+            <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+            <button type="submit" class="btn btn-success">Full Sync Now</button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Sidebar: how-to -->
+    <div class="col-md-4">
+      <div class="card mb-4 border-info">
+        <div class="card-header bg-info text-white">
+          <h5 class="mb-0">Quick Setup</h5>
+        </div>
+        <div class="card-body">
+          <ol class="pl-3 mb-0">
+            <li class="mb-2">On CTFProfile, navigate to your event and open <strong>Integrations</strong>.</li>
+            <li class="mb-2">Copy the <strong>Event API Key</strong> and the <strong>Event Slug</strong> from the integrations page.</li>
+            <li class="mb-2">Paste them into the fields on the left and save.</li>
+            <li class="mb-2">Click <strong>Test Connection</strong> to verify everything works.</li>
+            <li>Toggle <em>Sync on solve</em> to enable live updates, then click <strong>Full Sync Now</strong> to push existing data.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="card border-secondary">
+        <div class="card-header">
+          <h5 class="mb-0">How it works</h5>
+        </div>
+        <div class="card-body small text-muted">
+          <p>
+            This plugin listens for new solves using SQLAlchemy's <code>after_insert</code> hook.
+            When a flag is captured it POSTs a JSON payload to your CTFProfile instance.
+          </p>
+          <p>
+            CTFProfile matches users by CTFd username or a linked CTFProfile account. Teams are matched
+            by name. Challenges are upserted by their CTFd ID.
+          </p>
+          <p class="mb-0">
+            The API key is specific to the event and is generated on the CTFProfile integrations page.
+            Keep it secret — anyone with the key can write data to your event.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
