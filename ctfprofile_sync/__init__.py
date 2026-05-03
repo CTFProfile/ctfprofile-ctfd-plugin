@@ -32,7 +32,45 @@ def load(app):
     except Exception as exc:
         log.warning("CTFProfile Sync: could not attach solve listener: %s", exc)
 
+    # Create the "CTFProfile ID" custom user field if it doesn't exist yet.
+    # This surfaces on every user's CTFd profile settings page so they can
+    # enter their CTFProfile public ID for precise account linking.
+    with app.app_context():
+        _ensure_user_field()
+
     log.info("CTFProfile Sync plugin loaded. Admin panel: /admin/ctfprofile/")
+
+
+def _ensure_user_field():
+    """
+    Create a 'CTFProfile ID' text field in CTFd's user-profile fields table
+    if one doesn't already exist.  This field is shown on every user's
+    settings page so they can enter the public ID from their CTFProfile
+    account, enabling precise solve attribution even when CTFd and
+    CTFProfile usernames differ.
+    """
+    try:
+        from CTFd.models import UserFields, db  # type: ignore
+        existing = UserFields.query.filter_by(name="CTFProfile ID").first()
+        if not existing:
+            field = UserFields(
+                name="CTFProfile ID",
+                description=(
+                    "Your CTFProfile public ID. "
+                    "Find it on your CTFProfile profile page under Account Settings. "
+                    "Setting this ensures your CTFd solves are linked to the correct "
+                    "CTFProfile account even if your usernames differ."
+                ),
+                field_type="text",
+                required=False,
+                public=True,
+                editable=True,
+            )
+            db.session.add(field)
+            db.session.commit()
+            log.info("CTFProfile Sync: created 'CTFProfile ID' user field.")
+    except Exception as exc:
+        log.warning("CTFProfile Sync: could not create user field: %s", exc)
 
 
 # ---------------------------------------------------------------------------

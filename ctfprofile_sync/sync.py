@@ -20,7 +20,6 @@ def build_full_payload() -> dict:
     current database state.
     """
     from CTFd.models import Challenges, Teams, Users, Solves  # type: ignore
-    from CTFd.plugins.challenges import get_chal_class  # type: ignore
 
     challenges = []
     for ch in Challenges.query.all():
@@ -38,9 +37,9 @@ def build_full_payload() -> dict:
             "id": u.id,
             "name": u.name,
         }
-        # Include CTFProfile public_id if the custom field exists
-        if hasattr(u, "ctfprofile_public_id") and u.ctfprofile_public_id:
-            entry["ctfprofile_id"] = u.ctfprofile_public_id
+        ctfprofile_id = _get_ctfprofile_id(u)
+        if ctfprofile_id:
+            entry["ctfprofile_id"] = ctfprofile_id
         users.append(entry)
 
     teams = []
@@ -123,8 +122,9 @@ def build_solve_payload(solve) -> dict:
 
     if u:
         user_entry: dict[str, Any] = {"id": u.id, "name": u.name}
-        if hasattr(u, "ctfprofile_public_id") and u.ctfprofile_public_id:
-            user_entry["ctfprofile_id"] = u.ctfprofile_public_id
+        ctfprofile_id = _get_ctfprofile_id(u)
+        if ctfprofile_id:
+            user_entry["ctfprofile_id"] = ctfprofile_id
         payload["users"].append(user_entry)
 
     # Include team info if solve is team-based
@@ -143,6 +143,28 @@ def build_solve_payload(solve) -> dict:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _get_ctfprofile_id(user) -> str:
+    """
+    Read the value of the 'CTFProfile ID' custom user field for *user*.
+
+    CTFd stores custom profile fields in UserFieldEntries, not as direct
+    model attributes — so we query the table explicitly.  Returns an empty
+    string if the field doesn't exist or the user hasn't filled it in.
+    """
+    try:
+        from CTFd.models import UserFields, UserFieldEntries  # type: ignore
+        field = UserFields.query.filter_by(name="CTFProfile ID").first()
+        if not field:
+            return ""
+        entry = UserFieldEntries.query.filter_by(
+            field_id=field.id,
+            user_id=user.id,
+        ).first()
+        return (entry.value or "").strip() if entry else ""
+    except Exception:
+        return ""
+
 
 def _build_standings() -> list[dict]:
     """Return current score standings from CTFd's scoreboard cache."""
